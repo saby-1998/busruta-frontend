@@ -2,15 +2,31 @@ import React, { useState, useEffect, useCallback } from 'react';
 
 const HistorialGastos = ({ onBack, onEdit }) => {
   const [gastos, setGastos] = useState([]);
+  const [buses, setBuses] = useState([]);
+  const [busSeleccionado, setBusSeleccionado] = useState('');
   const [loading, setLoading] = useState(true);
 
-  // Usamos useCallback para poder refrescar la lista fácilmente
+  // 1. Cargar catálogo de buses para el filtro
+  useEffect(() => {
+    fetch('https://busruta-backend.onrender.com/buses')
+      .then(res => res.json())
+      .then(data => setBuses(data))
+      .catch(err => console.error("Error cargando buses:", err));
+  }, []);
+
+  // 2. Cargar gastos (General o filtrado por Bus)
   const fetchGastos = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch('https://busruta-backend.onrender.com/gastos');
+      // Si hay un bus seleccionado usamos el endpoint de filtro, sino el general
+      const url = busSeleccionado 
+        ? `https://busruta-backend.onrender.com/gastos/bus/${busSeleccionado}`
+        : 'https://busruta-backend.onrender.com/gastos';
+        
+      const res = await fetch(url);
       const data = await res.json();
-      // Ordenamos por fecha (más reciente primero) por si el backend no lo hace
+      
+      // Ordenar por fecha reciente
       const sortedData = data.sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
       setGastos(sortedData);
     } catch (err) {
@@ -18,27 +34,31 @@ const HistorialGastos = ({ onBack, onEdit }) => {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [busSeleccionado]);
 
   useEffect(() => {
     fetchGastos();
   }, [fetchGastos]);
 
+  // 3. Borrado Lógico (Soft Delete)
   const handleDelete = async (id, e) => {
     e.stopPropagation(); 
-    if (!window.confirm("¿Está seguro de eliminar este registro permanente?")) return;
+    if (!window.confirm("¿Mover este registro a la papelera?")) return;
 
     try {
-      const res = await fetch(`https://busruta-backend.onrender.com/gastos/${id}`, {
-        method: 'DELETE'
+      const res = await fetch(`https://busruta-backend.onrender.com/gastos/${id}/soft-delete`, {
+        method: 'PATCH', // Cambiado a PATCH según tu curl
+        headers: { 'accept': '*/*' }
       });
+      
       if (res.ok) {
+        // Removemos de la vista localmente
         setGastos(prev => prev.filter(g => g._id !== id));
       } else {
-        alert("No se pudo eliminar el registro");
+        alert("No se pudo mover a la papelera");
       }
     } catch (err) {
-      alert("Error de conexión al eliminar");
+      alert("Error de conexión");
     }
   };
 
@@ -48,20 +68,42 @@ const HistorialGastos = ({ onBack, onEdit }) => {
         <button onClick={onBack} className="close-circle-btn">
           <span className="material-symbols-outlined">arrow_back</span>
         </button>
-        <h2 className="title">Historial de Gastos</h2>
+        <h2 className="title">Historial</h2>
         <button onClick={fetchGastos} className="close-circle-btn" style={{ marginLeft: 'auto' }}>
           <span className="material-symbols-outlined">refresh</span>
         </button>
       </header>
 
-      <div className="scroll-area container" style={{ paddingBottom: '100px' }}>
+      {/* SECCIÓN DE FILTRO */}
+      <div className="container" style={{ marginTop: '15px' }}>
+        <div className="form-group">
+          <label style={{ fontSize: '12px', fontWeight: 'bold', color: '#666' }}>FILTRAR POR UNIDAD</label>
+          <select 
+            className="custom-input" 
+            value={busSeleccionado} 
+            onChange={(e) => setBusSeleccionado(e.target.value)}
+            style={{ border: '2px solid #3498db' }}
+          >
+            <option value="">Mostrar todas las unidades</option>
+            {buses.map(b => (
+              <option key={b._id} value={b._id}>
+                #{b.numeroUnidad} - {b.nombre}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
+
+      <div className="scroll-area container" style={{ paddingBottom: '100px', marginTop: '10px' }}>
         {loading ? (
           <div className="text-center" style={{ marginTop: '40px' }}>
-            <div className="spinner"></div> {/* Asegúrate de tener un spinner en tu CSS */}
-            <p>Cargando registros...</p>
+            <p>Buscando registros...</p>
           </div>
         ) : gastos.length === 0 ? (
-          <p className="text-center" style={{ marginTop: '40px', color: '#666' }}>No hay gastos registrados aún.</p>
+          <div className="text-center" style={{ marginTop: '40px', color: '#999' }}>
+             <span className="material-symbols-outlined" style={{ fontSize: '48px' }}>search_off</span>
+             <p>No se encontraron registros para esta unidad.</p>
+          </div>
         ) : (
           gastos.map(g => (
             <div 
@@ -72,9 +114,10 @@ const HistorialGastos = ({ onBack, onEdit }) => {
                 padding: '16px', 
                 borderRadius: '16px',
                 border: '1px solid #eee',
-                background: '#fff' 
+                background: '#fff',
+                boxShadow: '0 2px 4px rgba(0,0,0,0.02)'
               }} 
-              onClick={() => onEdit(g)} // Aquí pasamos el objeto g, App.jsx sacará el ID
+              onClick={() => onEdit(g)}
             >
               <div className="menu-text" style={{ width: '100%' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
@@ -100,8 +143,12 @@ const HistorialGastos = ({ onBack, onEdit }) => {
                 </div>
 
                 <p style={{ margin: '8px 0', fontSize: '14px', color: '#7f8c8d' }}>
-                  <span className="material-symbols-outlined" style={{ fontSize: '16px', verticalAlign: 'bottom', marginRight: '4px' }}>route</span>
-                  {g.ruta || 'Ruta no especificada'}
+                   <span className="material-symbols-outlined" style={{ fontSize: '16px', verticalAlign: 'middle', marginRight: '5px' }}>person</span>
+                   {g.chofer || 'Sin chofer'}
+                </p>
+                <p style={{ margin: '0', fontSize: '13px', color: '#95a5a6' }}>
+                   <span className="material-symbols-outlined" style={{ fontSize: '16px', verticalAlign: 'middle', marginRight: '5px' }}>route</span>
+                   {g.ruta}
                 </p>
 
                 <div style={{ 
@@ -113,7 +160,7 @@ const HistorialGastos = ({ onBack, onEdit }) => {
                   paddingTop: '10px'
                 }}>
                   <div>
-                    <span style={{ color: '#95a5a6', fontSize: '11px', display: 'block', textTransform: 'uppercase' }}>Valor Neto</span>
+                    <span style={{ color: '#95a5a6', fontSize: '11px', display: 'block' }}>NETO A RECIBIR</span>
                     <span style={{ color: '#27ae60', fontWeight: 'bold', fontSize: '1.3rem' }}>
                       ${(g.valorNeto || 0).toFixed(2)}
                     </span>
@@ -126,15 +173,15 @@ const HistorialGastos = ({ onBack, onEdit }) => {
                       background: '#fff0f0', 
                       color: '#e74c3c', 
                       border: 'none', 
-                      width: '40px', 
-                      height: '40px', 
-                      borderRadius: '50%',
+                      width: '38px', 
+                      height: '38px', 
+                      borderRadius: '10px',
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center'
                     }}
                   >
-                    <span className="material-symbols-outlined">delete</span>
+                    <span className="material-symbols-outlined">delete_sweep</span>
                   </button>
                 </div>
               </div>
