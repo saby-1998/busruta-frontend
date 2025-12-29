@@ -175,3 +175,18 @@ body {
   padding-top: 15px;
   border-top: 1px dashed var(--border-dark);
 }
+
+.white-btn {
+  background-color: #ffffff !important;
+  border: 1px solid #e0e0e0 !important;
+  box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+}
+
+.btn-text {
+  color: #333333 !important;
+  font-weight: 600;
+}
+
+.daily-icon { color: #3498db; }
+.monthly-icon { color: #e67e22; }
+.yearly-icon { color: #9b59b6; }

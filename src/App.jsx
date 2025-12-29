@@ -1,32 +1,48 @@
 import React, { useState } from 'react';
 import './App.css';
 import RegistroGastos from './components/RegistroGastos';
+import HistorialGastos from './components/HistorialGastos';
 
 function App() {
-  // Estado para controlar qué pantalla vemos: 'dashboard' o 'registro-diario'
   const [view, setView] = useState('dashboard');
+  const [idSeleccionado, setIdSeleccionado] = useState(null);
 
-  // Si la vista actual es el registro, renderizamos ese componente
-  if (view === 'registro-diario') {
-    return <RegistroGastos onBack={() => setView('dashboard')} />;
+  // Al hacer clic en un registro del historial
+  const handleEdit = (gasto) => {
+    setIdSeleccionado(gasto._id);
+    setView('editar-gasto');
+  };
+
+  // Vistas de Formulario (Nuevo o Editar)
+  if (view === 'registro-diario' || view === 'editar-gasto') {
+    return (
+      <RegistroGastos 
+        onBack={() => {
+          setView(view === 'editar-gasto' ? 'historial' : 'dashboard');
+          setIdSeleccionado(null);
+        }} 
+        gastoId={idSeleccionado} 
+      />
+    );
+  }
+
+  // Vista de Historial
+  if (view === 'historial') {
+    return (
+      <HistorialGastos 
+        onBack={() => setView('dashboard')} 
+        onEdit={handleEdit}
+      />
+    );
   }
 
   return (
     <div className="container">
       <header className="header">
         <div className="profile">
-          <div className="avatar">
-            <span className="material-symbols-outlined">person</span>
-          </div>
-          <div>
-            <p className="welcome">DASHBOARD</p>
-            <p className="name">Wlady</p>
-          </div>
+          <div className="avatar"><span className="material-symbols-outlined">person</span></div>
+          <div><p className="welcome">DASHBOARD</p><p className="name">Wlady</p></div>
         </div>
-        <button className="notification-btn">
-          <span className="material-symbols-outlined">notifications</span>
-          <span className="notification-dot"></span>
-        </button>
       </header>
 
       <div className="unit-info">
@@ -36,42 +52,33 @@ function App() {
 
       <div className="card">
         <div className="card-header">
-          <div>
-            <p className="card-label">Gasto Acumulado (Mes)</p>
-            <p className="amount">$1,240.00</p>
-          </div>
-          <div className="card-icon-wrapper">
-            <span className="material-symbols-outlined">monitoring</span>
-          </div>
-        </div>
-        <div className="card-footer-info">
-          <p>Presupuesto restante: <strong>$450.00</strong></p>
-          <div className="progress-bar"><div className="progress-fill"></div></div>
+          <div><p className="card-label">Gasto Acumulado</p><p className="amount">$1,240.00</p></div>
+          <div className="card-icon-wrapper"><span className="material-symbols-outlined">monitoring</span></div>
         </div>
       </div>
 
       <h2 className="section-title">Registrar Nuevo Gasto</h2>
       <div className="registration-grid">
-        {/* CONEXIÓN AQUÍ: Al hacer clic, cambiamos a la vista de registro */}
-        <button className="reg-card daily" onClick={() => setView('registro-diario')}>
-          <div className="reg-icon"><span className="material-symbols-outlined">receipt</span></div>
-          <span>Diario</span>
+        {/* BOTONES CON FONDO BLANCO PARA MEJOR VISIBILIDAD */}
+        <button className="reg-card white-btn" onClick={() => { setIdSeleccionado(null); setView('registro-diario'); }}>
+          <div className="reg-icon daily-icon"><span className="material-symbols-outlined">receipt</span></div>
+          <span className="btn-text">Diario</span>
         </button>
         
-        <button className="reg-card monthly">
-          <div className="reg-icon"><span className="material-symbols-outlined">calendar_month</span></div>
-          <span>Mensual</span>
+        <button className="reg-card white-btn">
+          <div className="reg-icon monthly-icon"><span className="material-symbols-outlined">calendar_month</span></div>
+          <span className="btn-text">Mensual</span>
         </button>
         
-        <button className="reg-card yearly">
-          <div className="reg-icon"><span className="material-symbols-outlined">account_balance</span></div>
-          <span>Anual</span>
+        <button className="reg-card white-btn">
+          <div className="reg-icon yearly-icon"><span className="material-symbols-outlined">account_balance</span></div>
+          <span className="btn-text">Anual</span>
         </button>
       </div>
 
       <h2 className="section-title">Consultar</h2>
       <div className="menu">
-        <button className="menu-item">
+        <button className="menu-item" onClick={() => setView('historial')}>
           <span className="material-symbols-outlined menu-icon">history</span>
           <div className="menu-text">
             <strong>Historial de Gastos</strong>
@@ -82,9 +89,12 @@ function App() {
       </div>
 
       <nav className="bottom-nav">
-        <div className="nav-item active"><span className="material-symbols-outlined">grid_view</span><span>Panel</span></div>
-        <div className="nav-item"><span className="material-symbols-outlined">history</span><span>Historial</span></div>
-        <div className="nav-item"><span className="material-symbols-outlined">person</span><span>Perfil</span></div>
+        <div className={`nav-item ${view === 'dashboard' ? 'active' : ''}`} onClick={() => setView('dashboard')}>
+          <span className="material-symbols-outlined">grid_view</span><span>Panel</span>
+        </div>
+        <div className={`nav-item ${view === 'historial' ? 'active' : ''}`} onClick={() => setView('historial')}>
+          <span className="material-symbols-outlined">history</span><span>Historial</span>
+        </div>
       </nav>
     </div>
   );

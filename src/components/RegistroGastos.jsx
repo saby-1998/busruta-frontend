@@ -1,19 +1,19 @@
 import React, { useState, useEffect } from 'react';
 import { useGastosForm } from '../hooks/useGastosForm';
 
-const RegistroGastos = ({ onBack }) => {
-  const { form, handleChange, addOtroGasto, updateOtroGasto, removeOtroGasto, totales } = useGastosForm();
+const RegistroGastos = ({ onBack, gastoId }) => {
+  const { form, setForm, handleChange, addOtroGasto, updateOtroGasto, removeOtroGasto, totales } = useGastosForm();
   const [loading, setLoading] = useState(false);
+  const [fetchingData, setFetchingData] = useState(true);
   
-  // Estados para datos del Backend
   const [buses, setBuses] = useState([]);
   const [rutas, setRutas] = useState([]);
-  const [fetchingData, setFetchingData] = useState(true);
 
-  // Cargar Buses y Rutas desde Render
   useEffect(() => {
-    const fetchData = async () => {
+    const loadAllData = async () => {
+      setFetchingData(true);
       try {
+        // 1. Carga secuencial de catálogos
         const [resBuses, resRutas] = await Promise.all([
           fetch('https://busruta-backend.onrender.com/buses'),
           fetch('https://busruta-backend.onrender.com/rutas')
@@ -24,29 +24,36 @@ const RegistroGastos = ({ onBack }) => {
         
         setBuses(dataBuses);
         setRutas(dataRutas);
+
+        // 2. Poblado de datos si es edición
+        if (gastoId) {
+          const resGasto = await fetch(`https://busruta-backend.onrender.com/gastos/${gastoId}`);
+          const g = await resGasto.json();
+
+          setForm({
+            ...g,
+            bus: g.bus?._id || g.bus, 
+            fecha: g.fecha ? g.fecha.split('T')[0] : "",
+            otrosGastosList: g.otrosGastosList || []
+          });
+        }
       } catch (error) {
-        console.error("Error cargando datos:", error);
+        console.error("Error en la carga:", error);
       } finally {
         setFetchingData(false);
       }
     };
-    fetchData();
-  }, []);
+    loadAllData();
+  }, [gastoId, setForm]);
 
   const handleGuardar = async () => {
-    if (!form.bus) return alert("Por favor seleccione un bus");
-    if (form.recaudacionTotal <= 0) return alert("Ingrese la recaudación");
-    
+    if (!form.bus) return alert("Por favor, seleccione un bus.");
     setLoading(true);
 
-    // LIMPIEZA DE DATOS ANTES DE ENVIAR (Conversión de tipos)
     const datosAEnviar = {
       ...form,
       bus: String(form.bus),
-      ruta: String(form.ruta || ""),
-      chofer: String(form.chofer || ""),
-      fecha: new Date(form.fecha).toISOString(), 
-      
+      fecha: new Date(form.fecha).toISOString(),
       kmInicial: Number(form.kmInicial || 0),
       kmFinal: Number(form.kmFinal || 0),
       recaudacionTotal: Number(form.recaudacionTotal || 0),
@@ -60,55 +67,60 @@ const RegistroGastos = ({ onBack }) => {
       multas: Number(form.multas || 0),
       faltantes: Number(form.faltantes || 0),
       recaudacionPrestamo: Number(form.recaudacionPrestamo || 0),
-      
       otrosGastosList: form.otrosGastosList.map(item => ({
         desc: String(item.desc),
         valor: Number(item.valor || 0)
       })),
-
       totalGastos: Number(totales.totalGastos),
       valorNeto: Number(totales.valorNeto)
     };
 
+    const url = gastoId 
+      ? `https://busruta-backend.onrender.com/gastos/${gastoId}` 
+      : 'https://busruta-backend.onrender.com/gastos';
+    
     try {
-      const response = await fetch('https://busruta-backend.onrender.com/gastos', {
-        method: 'POST',
-        headers: { 
-          'Content-Type': 'application/json',
-          'Accept': 'application/json'
-        },
+      const response = await fetch(url, {
+        method: gastoId ? 'PATCH' : 'POST',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(datosAEnviar)
       });
 
-      const resData = await response.json();
-
       if (response.ok) {
-        alert("✅ Registro guardado exitosamente");
+        alert(gastoId ? "✅ Actualizado" : "✅ Guardado");
         onBack();
-      } else {
-        const errorMsg = Array.isArray(resData.message) ? resData.message.join(", ") : resData.message;
-        alert(`❌ Error: ${errorMsg}`);
       }
-    } catch (error) {
-      alert("⚠️ Error de conexión con el servidor");
+    } catch (e) {
+      alert("Error de conexión");
     } finally {
       setLoading(false);
     }
   };
 
-  // Función auxiliar para seleccionar texto al hacer clic (Evita el problema del 0)
   const handleFocus = (e) => e.target.select();
+
+  if (fetchingData) return <div className="container text-center"><p>Cargando datos...</p></div>;
 
   return (
     <div className="registration-view">
       <header className="header-form">
         <button onClick={onBack} className="close-circle-btn">
-          <span className="material-symbols-outlined">close</span>
+          <span className="material-symbols-outlined">{gastoId ? 'arrow_back' : 'close'}</span>
         </button>
-        <h2 className="title">Nuevo Registro</h2>
+        <h2 className="title">{gastoId ? 'Detalle de Gasto' : 'Nuevo Registro'}</h2>
       </header>
 
       <div className="scroll-area container">
+        {gastoId && (
+          <div className="form-group" style={{ marginBottom: '20px' }}>
+            <label style={{ color: '#888', fontSize: '11px', fontWeight: 'bold' }}>ID REGISTRO</label>
+            <div style={{ background: '#f5f5f5', padding: '10px', borderRadius: '8px', border: '1px solid #ddd', color: '#666', fontSize: '12px' }}>
+              {gastoId}
+            </div>
+          </div>
+        )}
+
+        {/* INFORMACIÓN GENERAL */}
         <section>
           <h3 className="section-label">Información General</h3>
           <div className="form-group">
@@ -118,27 +130,28 @@ const RegistroGastos = ({ onBack }) => {
           <div className="grid-2">
             <div className="form-group">
               <label>Bus / Unidad</label>
-              <select name="bus" value={form.bus} onChange={handleChange} className="custom-input custom-select">
-                <option value="">{fetchingData ? 'Cargando...' : 'Seleccionar unidad'}</option>
-                {buses.map((bus) => (
-                  <option key={bus._id} value={bus._id}>{bus.nombre} (#{bus.numeroUnidad})</option>
+              <select name="bus" value={form.bus} onChange={handleChange} className="custom-input">
+                <option value="">Seleccionar bus...</option>
+                {buses.map(b => (
+                  <option key={b._id} value={b._id}>{b.nombre} (#{b.numeroUnidad})</option>
                 ))}
               </select>
             </div>
             <div className="form-group">
               <label>Chofer</label>
-              <input type="text" name="chofer" value={form.chofer} onChange={handleChange} placeholder="Nombre del chofer" className="custom-input" />
+              <input type="text" name="chofer" value={form.chofer} onChange={handleChange} className="custom-input" />
             </div>
           </div>
         </section>
 
+        {/* DATOS OPERATIVOS */}
         <section>
           <h3 className="section-label">Datos Operativos</h3>
           <div className="form-group">
-            <label>Ruta (Seleccione o escriba)</label>
-            <input list="rutas-list" name="ruta" value={form.ruta} onChange={handleChange} placeholder="Escriba o elija..." className="custom-input" autoComplete="off" />
+            <label>Ruta</label>
+            <input list="rutas-list" name="ruta" value={form.ruta} onChange={handleChange} className="custom-input" placeholder="Escriba o elija..." />
             <datalist id="rutas-list">
-              {rutas.map((ruta) => <option key={ruta._id} value={ruta.nombre} />)}
+              {rutas.map(r => <option key={r._id} value={r.nombre} />)}
             </datalist>
           </div>
           <div className="grid-2">
@@ -151,17 +164,17 @@ const RegistroGastos = ({ onBack }) => {
               <input type="number" name="kmFinal" value={form.kmFinal} onChange={handleChange} onFocus={handleFocus} className="custom-input" />
             </div>
           </div>
-          <p className="km-info text-right">Recorrido: <strong>{totales.recorrido} km</strong></p>
         </section>
 
+        {/* FINANZAS */}
         <section>
           <h3 className="section-label">Finanzas</h3>
           <div className="recaudacion-box">
-             <label>Recaudación Total</label>
-             <div className="input-with-symbol">
-                <span className="symbol-large">$</span>
-                <input type="number" name="recaudacionTotal" value={form.recaudacionTotal} onChange={handleChange} onFocus={handleFocus} className="recaudacion-input" />
-             </div>
+            <label>Recaudación Total</label>
+            <div className="input-with-symbol">
+              <span className="symbol-large">$</span>
+              <input type="number" name="recaudacionTotal" value={form.recaudacionTotal} onChange={handleChange} onFocus={handleFocus} className="recaudacion-input" />
+            </div>
           </div>
 
           <div className="space-y-gastos">
@@ -210,39 +223,54 @@ const RegistroGastos = ({ onBack }) => {
               </div>
             </div>
 
-            {[
-              { label: 'Depósito Compañía', name: 'depositoCia' },
-              { label: 'Multas', name: 'multas' },
-              { label: 'Valor Faltantes', name: 'faltantes' },
-              { label: 'Recaudación Préstamo', name: 'recaudacionPrestamo' }
-            ].map(item => (
-              <div className="form-group" key={item.name}>
-                <label>{item.label}</label>
-                <div className="input-with-symbol">
-                  <span className="symbol">$</span>
-                  <input type="number" name={item.name} value={form[item.name]} onChange={handleChange} onFocus={handleFocus} className="custom-input" />
+            <div className="grid-2">
+              <div className="form-group">
+                <label>Depósito Cía</label>
+                <div className="input-with-symbol"><span className="symbol">$</span>
+                  <input type="number" name="depositoCia" value={form.depositoCia} onChange={handleChange} onFocus={handleFocus} className="custom-input" />
                 </div>
               </div>
-            ))}
-
-            <div className="others-section">
-              <label className="section-label" style={{border: 'none'}}>Otros Gastos Detallados</label>
-              {form.otrosGastosList.map((item, index) => (
-                <div key={index} className="dynamic-row">
-                  <input type="text" placeholder="Descripción" value={item.desc} onChange={(e) => updateOtroGasto(index, 'desc', e.target.value)} className="custom-input" />
-                  <div className="input-with-symbol">
-                    <span className="symbol">$</span>
-                    <input type="number" value={item.valor} onChange={(e) => updateOtroGasto(index, 'valor', e.target.value)} onFocus={handleFocus} className="custom-input" />
-                  </div>
-                  <button onClick={() => removeOtroGasto(index)} className="delete-btn">×</button>
+              <div className="form-group">
+                <label>Multas</label>
+                <div className="input-with-symbol"><span className="symbol">$</span>
+                  <input type="number" name="multas" value={form.multas} onChange={handleChange} onFocus={handleFocus} className="custom-input" />
                 </div>
-              ))}
-              <button className="add-others-btn" onClick={(e) => { e.preventDefault(); addOtroGasto(); }}>+ Añadir Gasto Extra</button>
+              </div>
+            </div>
+
+            <div className="grid-2">
+              <div className="form-group">
+                <label>Faltantes</label>
+                <div className="input-with-symbol"><span className="symbol">$</span>
+                  <input type="number" name="faltantes" value={form.faltantes} onChange={handleChange} onFocus={handleFocus} className="custom-input" />
+                </div>
+              </div>
+              <div className="form-group">
+                <label>Préstamo</label>
+                <div className="input-with-symbol"><span className="symbol">$</span>
+                  <input type="number" name="recaudacionPrestamo" value={form.recaudacionPrestamo} onChange={handleChange} onFocus={handleFocus} className="custom-input" />
+                </div>
+              </div>
             </div>
           </div>
         </section>
 
-        <div className="total-display-card" style={{marginTop: '40px'}}>
+        <section className="others-section">
+          <label className="section-label">Otros Gastos Detallados</label>
+          {form.otrosGastosList.map((item, index) => (
+            <div key={index} className="dynamic-row">
+              <input type="text" value={item.desc} onChange={(e) => updateOtroGasto(index, 'desc', e.target.value)} className="custom-input" placeholder="Descripción" />
+              <div className="input-with-symbol">
+                <span className="symbol">$</span>
+                <input type="number" value={item.valor} onChange={(e) => updateOtroGasto(index, 'valor', e.target.value)} onFocus={handleFocus} className="custom-input" />
+              </div>
+              <button onClick={() => removeOtroGasto(index)} className="delete-btn">×</button>
+            </div>
+          ))}
+          <button className="add-others-btn" onClick={addOtroGasto}>+ Añadir Gasto Extra</button>
+        </section>
+
+        <div className="total-display-card">
           <div className="row"><span>Total Gastos</span><span>${totales.totalGastos.toFixed(2)}</span></div>
           <div className="row highlighted">
             <span>VALOR NETO</span>
@@ -254,7 +282,7 @@ const RegistroGastos = ({ onBack }) => {
       <div className="action-footer">
         <button className="main-save-btn" onClick={handleGuardar} disabled={loading}>
           <span className="material-symbols-outlined">{loading ? 'sync' : 'save'}</span>
-          {loading ? 'GUARDANDO...' : 'GUARDAR REGISTRO'}
+          {loading ? 'PROCESANDO...' : gastoId ? 'ACTUALIZAR CAMBIOS' : 'GUARDAR REGISTRO'}
         </button>
       </div>
     </div>
